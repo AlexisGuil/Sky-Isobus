@@ -82,15 +82,20 @@ const Cache = {
     }));
   },
 
-  get(key) {
-    try {
-      const raw = localStorage.getItem("sky_" + key);
-      if (!raw) return null;
-      const { data, ts } = JSON.parse(raw);
-      if (Date.now() - ts > CONFIG.CACHE_TTL * 1000) return null;
-      return data;
-    } catch { return null; }
-  },
+  async get(action, params = {}) {
+  const url = new URL(CONFIG.API_URL);
+  url.searchParams.set("action", action);
+  url.searchParams.set("pin",    CONFIG.PIN);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    redirect: "follow",
+    mode: "cors",
+  });
+  if (!response.ok) throw new Error(`Erreur réseau: ${response.status}`);
+  return response.json();
+},
 
   clear(key) {
     if (key) localStorage.removeItem("sky_" + key);
