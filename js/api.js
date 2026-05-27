@@ -1,171 +1,156 @@
 // ============================================================
 //  SKY AGRICULTURE — PWA ISOBUS
-//  api.js — Couche de communication avec Google Apps Script
+//  js/api.js — Communication JSONP (contourne CORS)
 // ============================================================
 
 const API = {
 
-  // ── Requête GET générique ──────────────────────────────────
-  async get(action, params = {}) {
-    const url = new URL(CONFIG.API_URL);
-    url.searchParams.set("action", action);
-    url.searchParams.set("pin",    CONFIG.PIN);
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  // ── Requête JSONP (contourne le blocage CORS de Google) ───
+  get(action, params) {
+    params = params || {};
+    return new Promise(function(resolve, reject) {
+      var cbName = "sky_cb_" + Date.now() + "_" + Math.floor(Math.random() * 9999);
+      var url    = new URL(CONFIG.API_URL);
 
-    const response = await fetch(url.toString());
-    if (!response.ok) throw new Error(`Erreur réseau: ${response.status}`);
-    return response.json();
-  },
+      url.searchParams.set("action",   action);
+      url.searchParams.set("pin",      CONFIG.PIN);
+      url.searchParams.set("callback", cbName);
+      Object.keys(params).forEach(function(k) {
+        url.searchParams.set(k, params[k]);
+      });
 
-  // ── Requête POST générique ─────────────────────────────────
-  async post(data) {
-    const response = await fetch(CONFIG.API_URL, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ ...data, pin: CONFIG.PIN }),
+      // Timeout 10 secondes
+      var timeout = setTimeout(function() {
+        cleanup();
+        reject(new Error("Timeout — vérifiez votre connexion"));
+      }, 10000);
+
+      function cleanup() {
+        clearTimeout(timeout);
+        delete window[cbName];
+        var el = document.getElementById(cbName);
+        if (el) el.parentNode.removeChild(el);
+      }
+
+      // Callback global appelé par le script JSONP
+      window[cbName] = function(data) {
+        cleanup();
+        resolve(data);
+      };
+
+      // Injection du script
+      var script    = document.createElement("script");
+      script.id     = cbName;
+      script.src    = url.toString();
+      script.onerror = function() {
+        cleanup();
+        reject(new Error("Erreur réseau"));
+      };
+      document.body.appendChild(script);
     });
-    if (!response.ok) throw new Error(`Erreur réseau: ${response.status}`);
+  },
+
+  // ── POST pour les retours terrain ─────────────────────────
+  async post(data) {
+    var response = await fetch(CONFIG.API_URL, {
+      method:   "POST",
+      redirect: "follow",
+      body:     JSON.stringify(Object.assign({ pin: CONFIG.PIN }, data)),
+    });
     return response.json();
   },
 
-  // ── Terminaux ──────────────────────────────────────────────
+  // ── Méthodes métier ───────────────────────────────────────
   async getTerminaux() {
-    const cached = Cache.get("terminaux");
+    var cached = Cache.get("terminaux");
     if (cached) return cached;
-    const data = await this.get("terminaux");
+    var data = await this.get("terminaux");
     Cache.set("terminaux", data);
     return data;
   },
 
-  // ── Versions ──────────────────────────────────────────────
   async getVersions() {
-    const cached = Cache.get("versions");
+    var cached = Cache.get("versions");
     if (cached) return cached;
-    const data = await this.get("versions");
+    var data = await this.get("versions");
     Cache.set("versions", data);
     return data;
   },
 
-  // ── Compatibilités ────────────────────────────────────────
   async getCompatibilites(idVersion) {
-    const key = "compat_" + idVersion;
-    const cached = Cache.get(key);
+    var key    = "compat_" + idVersion;
+    var cached = Cache.get(key);
     if (cached) return cached;
-    const data = await this.get("compatibilites", { version: idVersion });
+    var data = await this.get("compatibilites", { version: idVersion });
     Cache.set(key, data);
     return data;
   },
 
-  // ── Retours terrain ───────────────────────────────────────
-  async getRetours(idTerminal, fonction) {
-    return this.get("retours", { terminal: idTerminal, fonction });
+  async getRetours(idTerminal) {
+    return this.get("retours", { terminal: idTerminal });
   },
 
-  // ── Soumettre un retour ───────────────────────────────────
   async soumettreRetour(retour) {
-    // Si offline → stocker localement pour sync ultérieure
     if (!navigator.onLine) {
       OfflineQueue.ajouter(retour);
-      return { succes: true, offline: true, message: "Retour enregistré localement. Il sera envoyé dès la reconnexion." };
+      return { succes: true, offline: true };
     }
-    return this.post({ action: "soumettre_retour", ...retour });
+    return this.post(Object.assign({ action: "soumettre_retour" }, retour));
   },
 };
 
 
 // ── Cache localStorage ─────────────────────────────────────
-const Cache = {
-  set(key, data) {
-    localStorage.setItem("sky_" + key, JSON.stringify({
-      data,
-      ts: Date.now(),
-    }));
+var Cache = {
+  set: function(key, data) {
+    try {
+      localStorage.setItem("sky_" + key, JSON.stringify({ data: data, ts: Date.now() }));
+    } catch(e) {}
   },
-
-  async get(action, params = {}) {
-  return new Promise((resolve, reject) => {
-    const callbackName = "sky_cb_" + Date.now();
-    const url = new URL(CONFIG.API_URL);
-    url.searchParams.set("action",   action);
-    url.searchParams.set("pin",      CONFIG.PIN);
-    url.searchParams.set("callback", callbackName);
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-
-    const script = document.createElement("script");
-    script.src = url.toString();
-
-    window[callbackName] = (data) => {
-      delete window[callbackName];
-      document.body.removeChild(script);
-      resolve(data);
-    };
-
-    script.onerror = () => {
-      delete window[callbackName];
-      document.body.removeChild(script);
-      reject(new Error("Erreur réseau"));
-    };
-
-    setTimeout(() => {
-      if (window[callbackName]) {
-        delete window[callbackName];
-        reject(new Error("Timeout"));
-      }
-    }, 10000);
-
-    document.body.appendChild(script);
-  });
-},
-
-  clear(key) {
-    if (key) localStorage.removeItem("sky_" + key);
-    else Object.keys(localStorage)
-      .filter(k => k.startsWith("sky_"))
-      .forEach(k => localStorage.removeItem(k));
+  get: function(key) {
+    try {
+      var raw = localStorage.getItem("sky_" + key);
+      if (!raw) return null;
+      var obj = JSON.parse(raw);
+      if (Date.now() - obj.ts > CONFIG.CACHE_TTL * 1000) return null;
+      return obj.data;
+    } catch(e) { return null; }
   },
+  clear: function() {
+    Object.keys(localStorage)
+      .filter(function(k) { return k.startsWith("sky_"); })
+      .forEach(function(k) { localStorage.removeItem(k); });
+  }
 };
 
 
 // ── File d'attente offline ─────────────────────────────────
-const OfflineQueue = {
+var OfflineQueue = {
   KEY: "sky_offline_queue",
-
-  ajouter(retour) {
-    const queue = this.lire();
-    queue.push({ retour, ts: Date.now() });
-    localStorage.setItem(this.KEY, JSON.stringify(queue));
+  ajouter: function(retour) {
+    var q = this.lire();
+    q.push({ retour: retour, ts: Date.now() });
+    localStorage.setItem(this.KEY, JSON.stringify(q));
   },
-
-  lire() {
-    try {
-      return JSON.parse(localStorage.getItem(this.KEY) || "[]");
-    } catch { return []; }
+  lire: function() {
+    try { return JSON.parse(localStorage.getItem(this.KEY) || "[]"); }
+    catch(e) { return []; }
   },
-
   async synchroniser() {
-    const queue = this.lire();
+    var queue = this.lire();
     if (!queue.length || !navigator.onLine) return;
-
-    const restants = [];
-    for (const item of queue) {
-      try {
-        await API.post({ action: "soumettre_retour", ...item.retour });
-      } catch {
-        restants.push(item); // Garder pour réessayer
-      }
+    var restants = [];
+    for (var i = 0; i < queue.length; i++) {
+      try { await API.post(Object.assign({ action: "soumettre_retour" }, queue[i].retour)); }
+      catch(e) { restants.push(queue[i]); }
     }
     localStorage.setItem(this.KEY, JSON.stringify(restants));
-    if (queue.length !== restants.length) {
-      UI.toast(`${queue.length - restants.length} retour(s) terrain synchronisé(s) ✓`, "success");
+    if (queue.length > restants.length) {
+      UI.toast((queue.length - restants.length) + " retour(s) synchronisé(s) ✓", "success");
     }
-  },
-
-  count() {
-    return this.lire().length;
-  },
+  }
 };
 
-// Synchronisation automatique au retour de connexion
-window.addEventListener("online", () => {
-  setTimeout(() => OfflineQueue.synchroniser(), CONFIG.SYNC_DELAY);
+window.addEventListener("online", function() {
+  setTimeout(function() { OfflineQueue.synchroniser(); }, 2000);
 });
