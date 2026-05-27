@@ -83,18 +83,38 @@ const Cache = {
   },
 
   async get(action, params = {}) {
-  const url = new URL(CONFIG.API_URL);
-  url.searchParams.set("action", action);
-  url.searchParams.set("pin",    CONFIG.PIN);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  return new Promise((resolve, reject) => {
+    const callbackName = "sky_cb_" + Date.now();
+    const url = new URL(CONFIG.API_URL);
+    url.searchParams.set("action",   action);
+    url.searchParams.set("pin",      CONFIG.PIN);
+    url.searchParams.set("callback", callbackName);
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    redirect: "follow",
-    mode: "cors",
+    const script = document.createElement("script");
+    script.src = url.toString();
+
+    window[callbackName] = (data) => {
+      delete window[callbackName];
+      document.body.removeChild(script);
+      resolve(data);
+    };
+
+    script.onerror = () => {
+      delete window[callbackName];
+      document.body.removeChild(script);
+      reject(new Error("Erreur réseau"));
+    };
+
+    setTimeout(() => {
+      if (window[callbackName]) {
+        delete window[callbackName];
+        reject(new Error("Timeout"));
+      }
+    }, 10000);
+
+    document.body.appendChild(script);
   });
-  if (!response.ok) throw new Error(`Erreur réseau: ${response.status}`);
-  return response.json();
 },
 
   clear(key) {
