@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Sky ISOBUS">
+  <meta name="description" content="Vérifiez la compatibilité ISOBUS de vos semoirs Sky Agriculture">
+
+  <title>Sky Agriculture — Compatibilité ISOBUS</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <!-- Tabler Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+
+  <!-- Styles Sky Agriculture -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ─── ÉCRAN PIN ──────────────────────────────────────────── -->
+<div id="pin-screen">
+  <div class="pin-logo">🦅</div>
+  <div class="pin-title">Sky Agriculture</div>
+  <div class="pin-sub">Entrez votre code PIN pour accéder<br>à la compatibilité ISOBUS</div>
+  <div class="pin-dots">
+    <div class="pin-dot"></div>
+    <div class="pin-dot"></div>
+    <div class="pin-dot"></div>
+    <div class="pin-dot"></div>
+  </div>
+  <div class="pin-keypad">
+    <button class="pin-key" data-value="1">1</button>
+    <button class="pin-key" data-value="2">2</button>
+    <button class="pin-key" data-value="3">3</button>
+    <button class="pin-key" data-value="4">4</button>
+    <button class="pin-key" data-value="5">5</button>
+    <button class="pin-key" data-value="6">6</button>
+    <button class="pin-key" data-value="7">7</button>
+    <button class="pin-key" data-value="8">8</button>
+    <button class="pin-key" data-value="9">9</button>
+    <button class="pin-key" data-value="" style="background:transparent"></button>
+    <button class="pin-key" data-value="0">0</button>
+    <button class="pin-key delete" data-value="del"><i class="ti ti-backspace"></i></button>
+  </div>
+  <div id="pin-error" class="pin-error"></div>
+</div>
+
+
+<!-- ─── APPLICATION ────────────────────────────────────────── -->
+<div id="app">
+
+  <!-- ── ÉCRAN 1 — Accueil & recherche ───────────────────── -->
+  <div id="screen-accueil" class="screen">
+
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-badge">🦅</div>
+      <div class="header-text">
+        <div class="header-brand">Sky Agriculture</div>
+        <div class="header-title">Compatibilité ISOBUS</div>
+      </div>
+      <div class="offline-badge" id="offline-badge">
+        <div class="offline-dot"></div>
+        <span class="offline-label">En ligne</span>
+      </div>
+    </header>
+
+    <!-- Corps -->
+    <div class="screen-body" id="screen-accueil-body">
+
+      <!-- Sélecteur version -->
+      <div class="form-group">
+        <div class="section-label">Version logicielle semoir</div>
+        <select class="sky-select" id="select-version">
+          <option>Chargement…</option>
+        </select>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Recherche terminal -->
+      <div class="section-label">Votre terminal ISOBUS</div>
+      <div class="search-bar">
+        <i class="ti ti-search"></i>
+        <input type="text" id="recherche-input" placeholder="Rechercher un terminal…" autocomplete="off">
+      </div>
+
+      <!-- Grille des terminaux -->
+      <div class="terminal-grid" id="terminal-grid">
+        <!-- Rendu dynamiquement par app.js -->
+      </div>
+
+      <!-- CTA -->
+      <button class="btn-primary" id="btn-verifier" disabled>
+        Vérifier la compatibilité
+        <span class="accent"><i class="ti ti-arrow-right"></i></span>
+      </button>
+
+    </div><!-- /screen-body -->
+
+    <!-- Nav basse -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" id="nav-accueil">
+        <i class="ti ti-search"></i>
+        <span>Recherche</span>
+      </button>
+      <button class="nav-item" id="nav-historique" onclick="UI.toast('Historique disponible en V2', 'info')">
+        <i class="ti ti-clock-hour-4"></i>
+        <span>Historique</span>
+      </button>
+      <button class="nav-item" id="nav-terrain">
+        <i class="ti ti-message-plus"></i>
+        <span>Terrain</span>
+      </button>
+      <button class="nav-item" id="nav-reglages" onclick="UI.toast('Réglages disponibles en V2', 'info')">
+        <i class="ti ti-settings"></i>
+        <span>Réglages</span>
+      </button>
+    </nav>
+
+  </div><!-- /screen-accueil -->
+
+
+  <!-- ── ÉCRAN 2 — Résultat compatibilité ────────────────── -->
+  <div id="screen-resultat" class="screen">
+
+    <!-- Header résultat -->
+    <div class="result-header">
+      <button class="result-back" id="result-back">
+        <i class="ti ti-arrow-left"></i> Retour
+      </button>
+      <div class="result-terminal-name" id="result-terminal-name">Terminal</div>
+      <span class="result-firmware" id="result-firmware">Firmware</span>
+    </div>
+
+    <!-- Corps -->
+    <div class="screen-body">
+
+      <!-- Grille 4 fonctions -->
+      <div class="section-label" style="margin-bottom:10px">Résultats par fonction ISOBUS</div>
+      <div class="fonctions-grid" id="fonctions-grid">
+        <!-- Rendu dynamiquement -->
+      </div>
+
+      <!-- Bloc explication -->
+      <div class="explain-block" id="explain-block"></div>
+
+      <!-- Bouton retour terrain -->
+      <button class="terrain-btn" id="btn-terrain">
+        <i class="ti ti-message-plus"></i>
+        <div class="terrain-btn-text">
+          <div class="terrain-btn-label">Signaler un retour terrain</div>
+          <div class="terrain-btn-sub">Votre expérience enrichit la base</div>
+        </div>
+        <span class="terrain-badge">Nouveau</span>
+      </button>
+
+      <!-- Retours terrain publiés -->
+      <div class="retours-section">
+        <div class="section-label">Retours terrain</div>
+        <div id="retours-container">
+          <div class="loader"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+    </div><!-- /screen-body -->
+
+  </div><!-- /screen-resultat -->
+
+
+  <!-- ── ÉCRAN 3 — Retour terrain ────────────────────────── -->
+  <div id="screen-terrain" class="screen">
+
+    <!-- Header -->
+    <header class="app-header">
+      <button class="result-back" id="terrain-back" style="color:var(--vert);border:none;background:none;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px">
+        <i class="ti ti-arrow-left"></i> Retour
+      </button>
+      <div class="header-text" style="text-align:right">
+        <div class="header-title" style="font-size:14px">Retour terrain</div>
+      </div>
+    </header>
+
+    <!-- Corps -->
+    <div class="screen-body">
+
+      <div class="section-label" style="font-size:13px;text-transform:none;letter-spacing:0;color:var(--gris);margin-bottom:16px">
+        Votre retour sera validé par l'équipe Sky avant publication.
+      </div>
+
+      <!-- Contexte (pré-rempli, non modifiable) -->
+      <div class="form-group">
+        <label class="form-label">Contexte</label>
+        <div class="form-ctx" id="form-ctx">—</div>
+      </div>
+
+      <!-- Expérience -->
+      <div class="form-group">
+        <label class="form-label">Votre expérience</label>
+        <div class="exp-row">
+          <button class="exp-btn ok"   data-value="OUI">
+            <i class="ti ti-thumb-up" style="font-size:16px"></i><br>Fonctionne
+          </button>
+          <button class="exp-btn warn" data-value="PARTIEL">
+            <i class="ti ti-alert-triangle" style="font-size:16px"></i><br>Partiel
+          </button>
+          <button class="exp-btn nok"  data-value="NON">
+            <i class="ti ti-thumb-down" style="font-size:16px"></i><br>Ne fonctionne pas
+          </button>
+        </div>
+      </div>
+
+      <!-- Observation -->
+      <div class="form-group">
+        <label class="form-label" for="form-observation">Ce que vous avez observé</label>
+        <textarea
+          class="form-textarea"
+          id="form-observation"
+          placeholder="Décrivez ce qui fonctionne ou ne fonctionne pas, les conditions d'utilisation…"
+          rows="4"
+        ></textarea>
+      </div>
+
+      <!-- Photo (optionnel) -->
+      <div class="form-group">
+        <label class="form-label">Photo (optionnel)</label>
+        <div class="photo-row">
+          <button class="photo-btn" onclick="UI.toast('Upload photo disponible en V2', 'info')">
+            <i class="ti ti-camera"></i>
+            Appareil photo
+          </button>
+          <button class="photo-btn" onclick="UI.toast('Upload photo disponible en V2', 'info')">
+            <i class="ti ti-photo"></i>
+            Galerie
+          </button>
+        </div>
+      </div>
+
+      <!-- Envoi -->
+      <button class="btn-primary" id="btn-envoyer" disabled>
+        Envoyer le retour
+        <span class="accent"><i class="ti ti-send"></i></span>
+      </button>
+
+      <div class="anon-note">
+        <i class="ti ti-shield-check" style="font-size:13px"></i>
+        Votre nom n'est pas publié
+      </div>
+
+    </div><!-- /screen-body -->
+
+  </div><!-- /screen-terrain -->
+
+</div><!-- /app -->
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Scripts -->
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
