@@ -1,65 +1,91 @@
 // ============================================================
 //  SKY AGRICULTURE — PWA ISOBUS
-//  js/api.js — Via proxy allorigins (contourne CORS)
+//  js/api.js — JSONP natif corrigé v3
 // ============================================================
 
 const API = {
 
-  // ── Requête via proxy CORS ────────────────────────────────
-  async get(action, params) {
+  get(action, params) {
     params = params || {};
+    return new Promise(function(resolve, reject) {
+      // Nom de callback unique
+      var cb  = "sky" + Date.now();
+      var url = new URL(CONFIG.API_URL);
+      url.searchParams.set("action",   action);
+      url.searchParams.set("pin",      CONFIG.PIN);
+      url.searchParams.set("callback", cb);
+      Object.keys(params).forEach(function(k) { url.searchParams.set(k, params[k]); });
 
-    const target = new URL(CONFIG.API_URL);
-    target.searchParams.set("action", action);
-    target.searchParams.set("pin",    CONFIG.PIN);
-    Object.keys(params).forEach(k => target.searchParams.set(k, params[k]));
+      // Timeout 12s
+      var timer = setTimeout(function() {
+        cleanup(); reject(new Error("Timeout"));
+      }, 12000);
 
-    // Proxy qui ajoute les headers CORS manquants
-    const proxyUrl = "https://api.allorigins.win/get?url=" + encodeURIComponent(target.toString());
+      function cleanup() {
+        clearTimeout(timer);
+        if (window[cb]) delete window[cb];
+        var s = document.getElementById(cb);
+        if (s) s.parentNode.removeChild(s);
+      }
 
-    const response = await fetch(proxyUrl);
-    if (!response.ok) throw new Error("Erreur réseau: " + response.status);
+      // Callback global
+      window[cb] = function(data) { cleanup(); resolve(data); };
 
-    const json = await response.json();
-    return JSON.parse(json.contents);
-  },
+      // Injection script avec redirect follow
+      var s  = document.createElement("script");
+      s.id   = cb;
+      s.src  = url.toString();
+      s.type = "text/javascript";
 
-  // ── POST retours terrain ──────────────────────────────────
-  async post(data) {
-    const proxyUrl = "https://api.allorigins.win/post?url=" + encodeURIComponent(CONFIG.API_URL);
-    const response = await fetch(proxyUrl, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(Object.assign({ pin: CONFIG.PIN }, data)),
+      s.addEventListener("error", function() {
+        // Retry sans callback (JSON direct)
+        cleanup();
+        var url2 = new URL(CONFIG.API_URL);
+        url2.searchParams.set("action", action);
+        url2.searchParams.set("pin",    CONFIG.PIN);
+        Object.keys(params).forEach(function(k) { url2.searchParams.set(k, params[k]); });
+        fetch(url2.toString(), { redirect: "follow" })
+          .then(function(r) { return r.json(); })
+          .then(resolve)
+          .catch(reject);
+      });
+
+      document.head.appendChild(s);
     });
-    const json = await response.json();
-    return JSON.parse(json.contents);
   },
 
-  // ── Méthodes métier ───────────────────────────────────────
+  async post(data) {
+    const r = await fetch(CONFIG.API_URL, {
+      method: "POST",
+      redirect: "follow",
+      body: JSON.stringify(Object.assign({ pin: CONFIG.PIN }, data))
+    });
+    return r.json();
+  },
+
   async getTerminaux() {
-    const cached = Cache.get("terminaux");
-    if (cached) return cached;
-    const data = await this.get("terminaux");
-    Cache.set("terminaux", data);
-    return data;
+    const c = Cache.get("terminaux");
+    if (c) return c;
+    const d = await this.get("terminaux");
+    Cache.set("terminaux", d);
+    return d;
   },
 
   async getVersions() {
-    const cached = Cache.get("versions");
-    if (cached) return cached;
-    const data = await this.get("versions");
-    Cache.set("versions", data);
-    return data;
+    const c = Cache.get("versions");
+    if (c) return c;
+    const d = await this.get("versions");
+    Cache.set("versions", d);
+    return d;
   },
 
   async getCompatibilites(idVersion) {
-    const key    = "compat_" + idVersion;
-    const cached = Cache.get(key);
-    if (cached) return cached;
-    const data = await this.get("compatibilites", { version: idVersion });
-    Cache.set(key, data);
-    return data;
+    const key = "compat_" + idVersion;
+    const c   = Cache.get(key);
+    if (c) return c;
+    const d = await this.get("compatibilites", { version: idVersion });
+    Cache.set(key, d);
+    return d;
   },
 
   async getRetours(idTerminal) {
@@ -67,66 +93,35 @@ const API = {
   },
 
   async soumettreRetour(retour) {
-    if (!navigator.onLine) {
-      OfflineQueue.ajouter(retour);
-      return { succes: true, offline: true };
-    }
+    if (!navigator.onLine) { OfflineQueue.ajouter(retour); return { succes: true, offline: true }; }
     return this.post(Object.assign({ action: "soumettre_retour" }, retour));
   },
 };
 
-
-// ── Cache localStorage ────────────────────────────────────
 const Cache = {
-  set(key, data) {
+  set(k, d) { try { localStorage.setItem("sky_"+k, JSON.stringify({ d, t: Date.now() })); } catch(e){} },
+  get(k) {
     try {
-      localStorage.setItem("sky_" + key, JSON.stringify({ data, ts: Date.now() }));
-    } catch(e) {}
-  },
-  get(key) {
-    try {
-      const raw = localStorage.getItem("sky_" + key);
-      if (!raw) return null;
-      const obj = JSON.parse(raw);
-      if (Date.now() - obj.ts > CONFIG.CACHE_TTL * 1000) return null;
-      return obj.data;
+      var r = localStorage.getItem("sky_"+k);
+      if (!r) return null;
+      var o = JSON.parse(r);
+      if (Date.now() - o.t > CONFIG.CACHE_TTL * 1000) return null;
+      return o.d;
     } catch(e) { return null; }
   },
-  clear() {
-    Object.keys(localStorage)
-      .filter(k => k.startsWith("sky_"))
-      .forEach(k => localStorage.removeItem(k));
-  }
+  clear() { Object.keys(localStorage).filter(k=>k.startsWith("sky_")).forEach(k=>localStorage.removeItem(k)); }
 };
 
-
-// ── File d'attente offline ────────────────────────────────
 const OfflineQueue = {
-  KEY: "sky_offline_queue",
-  ajouter(retour) {
-    const q = this.lire();
-    q.push({ retour, ts: Date.now() });
-    localStorage.setItem(this.KEY, JSON.stringify(q));
-  },
-  lire() {
-    try { return JSON.parse(localStorage.getItem(this.KEY) || "[]"); }
-    catch(e) { return []; }
-  },
+  KEY: "sky_queue",
+  ajouter(r) { var q=this.lire(); q.push({r,t:Date.now()}); localStorage.setItem(this.KEY,JSON.stringify(q)); },
+  lire() { try { return JSON.parse(localStorage.getItem(this.KEY)||"[]"); } catch(e) { return []; } },
   async synchroniser() {
-    const queue = this.lire();
-    if (!queue.length || !navigator.onLine) return;
-    const restants = [];
-    for (const item of queue) {
-      try { await API.post(Object.assign({ action: "soumettre_retour" }, item.retour)); }
-      catch(e) { restants.push(item); }
-    }
-    localStorage.setItem(this.KEY, JSON.stringify(restants));
-    if (queue.length > restants.length) {
-      UI.toast((queue.length - restants.length) + " retour(s) synchronisé(s) ✓", "success");
-    }
+    var q=this.lire(); if (!q.length||!navigator.onLine) return;
+    var left=[];
+    for (var i=0;i<q.length;i++) { try { await API.post(Object.assign({action:"soumettre_retour"},q[i].r)); } catch(e) { left.push(q[i]); } }
+    localStorage.setItem(this.KEY,JSON.stringify(left));
+    if (q.length>left.length) UI.toast((q.length-left.length)+" retour(s) synchronisé(s) ✓","success");
   }
 };
-
-window.addEventListener("online", () => {
-  setTimeout(() => OfflineQueue.synchroniser(), 2000);
-});
+window.addEventListener("online", function(){ setTimeout(function(){ OfflineQueue.synchroniser(); }, 2000); });
