@@ -5,7 +5,7 @@
 
 const CONFIG = {
   // ← COLLEZ ICI VOTRE URL APPS SCRIPT (après déploiement)
- API_URL: "https://script.google.com/macros/s/AKfycbxyiy3N0khkTscEFox1XmLkHoc1vmLS8wjbEV7GowUt-1wjHnus3L1QdK87a1xZuoIb/exec",
+ API_URL: "https://script.google.com/macros/s/AKfycbyb6qEK5PDT8k0mQ9D8SGXIRFoKdlS7FiO1ZS3d9xrbZGolncHT59p1zc8SYkuCTTRi/exec",
 
   // ← VOTRE CODE PIN (doit être identique à celui dans Apps Script)
   PIN: "1234",
